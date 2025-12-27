@@ -56,14 +56,13 @@ app.use(fileUpload({
   responseOnLimit: 'File size exceeds the maximum limit'
 }));
 
-// Rate limiting - เพิ่มขึ้นสำหรับ development/testing
+// Rate limiting - ปรับให้หลวมสำหรับ test deployment
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 500, // 500 requests for dev, 100 for production
+  max: 1000, // เพิ่มเป็น 1000 requests ต่อ 15 นาที (สำหรับ test/development)
   message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip validation warnings สำหรับ Railway/Vercel/Heroku
+  standardHeaders: true,
+  legacyHeaders: false,
   validate: { trustProxy: false }
 });
 
