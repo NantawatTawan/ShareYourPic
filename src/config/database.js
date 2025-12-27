@@ -19,6 +19,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 
 // Helper function สำหรับ query
 export const db = {
+  supabase, // เพิ่ม supabase client เข้าไปใน db object
+
   // Images
   async getImages(filters = {}) {
     let query = supabase.from('images_with_stats').select('*');

@@ -1,11 +1,17 @@
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import db from '../config/database.js';
+import { createClient } from '@supabase/supabase-js';
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const STORAGE_BUCKET = 'shareyourpic-images'; // ชื่อ bucket ใน Supabase Storage
+
+// สร้าง Supabase client สำหรับ storage
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // ตรวจสอบไฟล์
 export const validateFile = (file) => {
@@ -61,7 +67,7 @@ export const saveImage = async (file) => {
 
     // Upload to Supabase Storage
     // Full image
-    const { data: fullImageData, error: fullImageError } = await db.supabase.storage
+    const { data: fullImageData, error: fullImageError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(`images/${filename}`, fullImageBuffer, {
         contentType: 'image/jpeg',
@@ -74,7 +80,7 @@ export const saveImage = async (file) => {
     }
 
     // Thumbnail
-    const { data: thumbnailData, error: thumbnailError } = await db.supabase.storage
+    const { data: thumbnailData, error: thumbnailError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(`thumbnails/${thumbnailFilename}`, thumbnailBuffer, {
         contentType: 'image/jpeg',
@@ -87,11 +93,11 @@ export const saveImage = async (file) => {
     }
 
     // Get public URLs
-    const { data: { publicUrl: fileUrl } } = db.supabase.storage
+    const { data: { publicUrl: fileUrl } } = supabase.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(`images/${filename}`);
 
-    const { data: { publicUrl: thumbnailUrl } } = db.supabase.storage
+    const { data: { publicUrl: thumbnailUrl } } = supabase.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(`thumbnails/${thumbnailFilename}`);
 
@@ -115,7 +121,7 @@ export const saveImage = async (file) => {
 export const deleteImage = async (filename, thumbnailFilename) => {
   try {
     // Delete full image
-    const { error: fullImageError } = await db.supabase.storage
+    const { error: fullImageError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .remove([`images/${filename}`]);
 
@@ -124,7 +130,7 @@ export const deleteImage = async (filename, thumbnailFilename) => {
     }
 
     // Delete thumbnail
-    const { error: thumbnailError } = await db.supabase.storage
+    const { error: thumbnailError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .remove([`thumbnails/${thumbnailFilename}`]);
 
