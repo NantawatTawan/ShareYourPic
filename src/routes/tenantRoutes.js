@@ -261,10 +261,22 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
     const amount = tenant.price_amount;
     const currency = tenant.price_currency;
 
+    // กำหนด payment methods ที่รองรับตาม currency
+    let paymentMethodTypes = ['card'];
+
+    // PromptPay รองรับเฉพาะ THB
+    if (currency.toLowerCase() === 'thb') {
+      paymentMethodTypes.push('promptpay');
+    }
+
+    // Link รองรับหลาย currency
+    paymentMethodTypes.push('link');
+
     // สร้าง PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
+      payment_method_types: paymentMethodTypes,
       metadata: {
         tenant_id: tenant.id,
         tenant_slug: tenant.slug,
@@ -724,7 +736,8 @@ router.put('/:tenantSlug/admin/settings', loadTenant, authenticateAdmin, checkTe
       display_duration,
       image_expiry_hours,
       max_images_per_user,
-      theme_settings
+      theme_settings,
+      display_settings
     } = req.body;
 
     // สร้าง object สำหรับ update
@@ -739,6 +752,7 @@ router.put('/:tenantSlug/admin/settings', loadTenant, authenticateAdmin, checkTe
     if (image_expiry_hours !== undefined) updates.image_expiry_hours = image_expiry_hours;
     if (max_images_per_user !== undefined) updates.max_images_per_user = max_images_per_user;
     if (theme_settings !== undefined) updates.theme_settings = theme_settings;
+    if (display_settings !== undefined) updates.display_settings = display_settings;
 
     // อัปเดตข้อมูลใน database
     const updatedTenant = await db.updateTenant(tenant.id, updates);
@@ -753,6 +767,56 @@ router.put('/:tenantSlug/admin/settings', loadTenant, authenticateAdmin, checkTe
       success: false,
       message: 'Failed to update settings'
     });
+  }
+});
+
+// ===========================================
+// STRIPE WEBHOOK
+// ===========================================
+
+// POST /webhook/stripe - Stripe webhook handler
+// Note: ต้องใช้ raw body ไม่ใช่ JSON parsed
+router.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
+  try {
+    // Verify webhook signature
+    if (webhookSecret) {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } else {
+      // ถ้าไม่มี webhook secret ให้ใช้ body ตรงๆ (development only)
+      event = JSON.parse(req.body.toString());
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        console.log('Payment succeeded:', paymentIntent.id);
+
+        // อัปเดต payment status ใน database
+        await db.updatePaymentStatus(paymentIntent.id, 'succeeded');
+        break;
+
+      case 'payment_intent.payment_failed':
+        const failedPayment = event.data.object;
+        console.log('Payment failed:', failedPayment.id);
+
+        // อัปเดต payment status ใน database
+        await db.updatePaymentStatus(failedPayment.id, 'failed');
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Webhook error:', err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
   }
 });
 

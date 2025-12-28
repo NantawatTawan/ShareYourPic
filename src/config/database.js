@@ -132,6 +132,21 @@ export const db = {
     return data;
   },
 
+  async updatePaymentStatus(stripePaymentIntentId, status) {
+    const { data, error } = await supabase
+      .from('payments')
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('stripe_payment_intent_id', stripePaymentIntentId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   // Likes
   async addLike(imageId, sessionId, tenant_id, ipAddress = null) {
     const { data, error } = await supabase

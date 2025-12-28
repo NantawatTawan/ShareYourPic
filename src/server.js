@@ -48,6 +48,9 @@ app.use(cors({
   credentials: true
 }));
 
+// Stripe webhook route - ต้องอยู่ก่อน express.json() เพื่อใช้ raw body
+app.use('/api/webhook/stripe', express.raw({ type: 'application/json' }), tenantRoutes);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
