@@ -290,9 +290,6 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
       paymentMethodTypes.push('promptpay');
     }
 
-    // Link รองรับหลาย currency
-    paymentMethodTypes.push('link');
-
     console.log('[Payment Create] Payment methods:', paymentMethodTypes);
 
     // สร้าง PaymentIntent
