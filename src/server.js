@@ -74,6 +74,16 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
+// Health check endpoint - ต้องอยู่ก่อน requireApiKey middleware!
+// Railway/Vercel/Heroku ใช้ health check โดยไม่มี API key
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'ShareYourPic API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // API Key Authentication - ใช้ร่วมกับ Proxy Server
 // Frontend → Proxy (ไม่มี API key) → Backend (Proxy เพิ่ม API key)
 app.use('/api/', requireApiKey);
@@ -94,15 +104,6 @@ app.use('/api/images', imageRoutes);
 // New multi-tenant routes
 app.use('/api', tenantRoutes);
 app.use('/api/super-admin', superAdminRoutes);
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'ShareYourPic API is running',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // 404 handler
 app.use((req, res) => {
