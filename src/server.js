@@ -18,6 +18,7 @@ import superAdminRoutes from './routes/superAdminRoutes.js';
 
 // Import utilities
 import { ensureUploadDirs } from './utils/fileHandler.js';
+import { requireApiKey } from './middleware/apiKeyAuth.js';
 
 dotenv.config();
 
@@ -72,6 +73,9 @@ const limiter = rateLimit({
 });
 
 app.use('/api/', limiter);
+
+// API Key Authentication - ป้องกันการเรียกใช้จาก Postman/tools อื่นๆ
+app.use('/api/', requireApiKey);
 
 // Serve static files (uploaded images)
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
