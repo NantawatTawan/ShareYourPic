@@ -364,22 +364,41 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
         });
       }
 
-      // ตรวจสอบ payment
-      const payment = await db.getPaymentByStripeId(paymentIntentId);
-
-      if (!payment || payment.status !== 'succeeded') {
+      // ตรวจสอบ payment จาก Stripe โดยตรง
+      let paymentIntent;
+      try {
+        paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        console.log('[Upload] Payment status from Stripe:', paymentIntent.status);
+      } catch (stripeError) {
+        console.error('[Upload] Stripe retrieve error:', stripeError.message);
         return res.status(400).json({
           success: false,
-          message: 'Payment not found or not completed'
+          message: 'Invalid payment ID'
+        });
+      }
+
+      // ตรวจสอบว่าจ่ายเงินสำเร็จแล้ว
+      if (paymentIntent.status !== 'succeeded') {
+        return res.status(400).json({
+          success: false,
+          message: 'Payment not completed. Status: ' + paymentIntent.status
         });
       }
 
       // ตรวจสอบว่า payment นี้เป็นของร้านนี้ไหม
-      if (payment.tenant_id !== tenant.id) {
+      if (paymentIntent.metadata.tenant_id !== tenant.id.toString()) {
         return res.status(400).json({
           success: false,
           message: 'Payment does not belong to this tenant'
         });
+      }
+
+      // Update payment status in database
+      try {
+        await db.updatePaymentStatus(paymentIntentId, 'succeeded');
+      } catch (dbError) {
+        console.error('[Upload] Failed to update payment status:', dbError.message);
+        // Don't block upload if DB update fails
       }
     }
 
