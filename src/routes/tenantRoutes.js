@@ -78,9 +78,10 @@ router.get('/:tenantSlug/images/display', loadTenant, async (req, res) => {
 router.get('/:tenantSlug/images/gallery', loadTenant, async (req, res) => {
   try {
     const tenant = req.tenant;
-    const { sort } = req.query;
+    const { sort, session_id } = req.query;
 
     console.log('🔍 [GALLERY] Received sort parameter:', sort);
+    console.log('🔍 [GALLERY] Session ID:', session_id);
 
     // Fetch images from database
     let images = await db.getImages({
@@ -124,10 +125,29 @@ router.get('/:tenantSlug/images/gallery', loadTenant, async (req, res) => {
       approved: img.approved_at
     })));
 
-    res.json({
-      success: true,
-      data: images
-    });
+    // Add hasLiked status for each image
+    if (session_id) {
+      const imagesWithLikeStatus = await Promise.all(
+        images.map(async (image) => {
+          const hasLiked = await db.hasUserLiked(image.id, session_id);
+          return {
+            ...image,
+            hasLiked
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        data: imagesWithLikeStatus
+      });
+    } else {
+      // No session_id, return images without hasLiked
+      res.json({
+        success: true,
+        data: images.map(img => ({ ...img, hasLiked: false }))
+      });
+    }
   } catch (error) {
     console.error('Get gallery images error:', error);
     res.status(500).json({
@@ -142,6 +162,7 @@ router.get('/:tenantSlug/images/:imageId', loadTenant, async (req, res) => {
   try {
     const tenant = req.tenant;
     const { imageId } = req.params;
+    const { session_id } = req.query;
 
     const image = await db.getImageById(imageId, tenant.id);
 
@@ -152,9 +173,18 @@ router.get('/:tenantSlug/images/:imageId', loadTenant, async (req, res) => {
       });
     }
 
+    // Check if user has liked this image
+    let hasLiked = false;
+    if (session_id) {
+      hasLiked = await db.hasUserLiked(imageId, session_id);
+    }
+
     res.json({
       success: true,
-      data: image
+      data: {
+        ...image,
+        hasLiked
+      }
     });
   } catch (error) {
     console.error('Get image error:', error);
