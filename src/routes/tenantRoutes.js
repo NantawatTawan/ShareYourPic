@@ -78,13 +78,51 @@ router.get('/:tenantSlug/images/display', loadTenant, async (req, res) => {
 router.get('/:tenantSlug/images/gallery', loadTenant, async (req, res) => {
   try {
     const tenant = req.tenant;
+    const { sort } = req.query;
 
-    const images = await db.getImages({
+    console.log('🔍 [GALLERY] Received sort parameter:', sort);
+
+    // Fetch images from database
+    let images = await db.getImages({
       tenant_id: tenant.id,
       status: 'approved',
       orderBy: 'approved_at',
       ascending: false
     });
+
+    console.log('🔍 [GALLERY] Total images:', images.length);
+    console.log('🔍 [GALLERY] Images before sort:', images.slice(0, 3).map(img => ({
+      id: img.id.substring(0, 8),
+      likes: img.like_count,
+      comments: img.comment_count,
+      approved: img.approved_at
+    })));
+
+    // Sort based on query parameter
+    switch (sort) {
+      case 'latest':
+        images.sort((a, b) => new Date(b.approved_at) - new Date(a.approved_at));
+        break;
+      case 'oldest':
+        images.sort((a, b) => new Date(a.approved_at) - new Date(b.approved_at));
+        break;
+      case 'most_liked':
+        images.sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
+        break;
+      case 'most_commented':
+        images.sort((a, b) => (b.comment_count || 0) - (a.comment_count || 0));
+        break;
+      default:
+        // Default: latest first
+        images.sort((a, b) => new Date(b.approved_at) - new Date(a.approved_at));
+    }
+
+    console.log('✅ [GALLERY] Images after sort:', images.slice(0, 3).map(img => ({
+      id: img.id.substring(0, 8),
+      likes: img.like_count,
+      comments: img.comment_count,
+      approved: img.approved_at
+    })));
 
     res.json({
       success: true,
