@@ -19,7 +19,6 @@ import superAdminRoutes from './routes/superAdminRoutes.js';
 // Import utilities
 import { ensureUploadDirs } from './utils/fileHandler.js';
 import { requireApiKey } from './middleware/apiKeyAuth.js';
-import { recaptchaForCriticalRoutes } from './middleware/recaptchaAuth.js';
 
 dotenv.config();
 
