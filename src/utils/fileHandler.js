@@ -14,12 +14,22 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'
 
 // สร้าง directories ถ้ายังไม่มี
 export const ensureUploadDirs = async () => {
+  // ถ้าใช้ Supabase Storage ไม่ต้องสร้าง directory
+  if (process.env.USE_SUPABASE_STORAGE === 'true') {
+    console.log('Using Supabase Storage - skipping local directory creation');
+    return;
+  }
+
   try {
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
     await fs.mkdir(THUMBNAIL_DIR, { recursive: true });
+    console.log('Upload directories created successfully');
   } catch (error) {
     console.error('Error creating upload directories:', error);
-    throw error;
+    // ไม่ throw error ถ้าใช้ Supabase Storage
+    if (process.env.USE_SUPABASE_STORAGE !== 'true') {
+      throw error;
+    }
   }
 };
 
