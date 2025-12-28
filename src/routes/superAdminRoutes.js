@@ -1,12 +1,88 @@
 import express from 'express';
 import { db } from '../config/database.js';
-import { authenticateAdmin } from '../middleware/auth.js';
+import { authenticateAdmin, generateToken } from '../middleware/auth.js';
 import { requireSuperAdmin } from '../middleware/tenant.js';
 import bcrypt from 'bcrypt';
 
 const router = express.Router();
 
-// ต้อง authenticate ทุก route
+// ===========================================
+// PUBLIC ROUTES (ไม่ต้อง authenticate)
+// ===========================================
+
+// POST /super-admin/login - Super Admin Login
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and password are required'
+      });
+    }
+
+    // ดึงข้อมูล admin
+    const admin = await db.getAdminByUsername(username);
+
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    // ตรวจสอบว่าเป็น super admin หรือไม่
+    if (!admin.is_super_admin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Super admin only.'
+      });
+    }
+
+    // ตรวจสอบรหัสผ่าน
+    const isValidPassword = await bcrypt.compare(password, admin.password_hash);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    // สร้าง JWT token
+    const token = generateToken({
+      id: admin.id,
+      username: admin.username,
+      is_super_admin: admin.is_super_admin,
+      role: admin.role
+    });
+
+    res.json({
+      success: true,
+      token,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        is_super_admin: admin.is_super_admin,
+        role: admin.role
+      }
+    });
+
+  } catch (error) {
+    console.error('Super admin login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Login failed'
+    });
+  }
+});
+
+// ===========================================
+// PROTECTED ROUTES (ต้อง authenticate)
+// ===========================================
+
+// ใช้ middleware สำหรับ routes ที่เหลือ
 router.use(authenticateAdmin);
 router.use(requireSuperAdmin);
 
