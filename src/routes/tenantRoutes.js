@@ -30,10 +30,13 @@ router.get('/:tenantSlug/theme', loadTenant, async (req, res) => {
       data: {
         name: tenant.name,
         slug: tenant.slug,
+        description: tenant.description,
         theme: tenant.theme_settings,
+        display_settings: tenant.display_settings,
         payment_enabled: tenant.payment_enabled,
         price_amount: tenant.price_amount,
-        price_currency: tenant.price_currency
+        price_currency: tenant.price_currency,
+        display_duration: tenant.display_duration
       }
     });
   } catch (error) {
