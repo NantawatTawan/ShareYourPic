@@ -84,9 +84,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Key Authentication - ใช้ร่วมกับ Proxy Server
+// API Key Authentication - TEMPORARILY DISABLED for debugging
 // Frontend → Proxy (ไม่มี API key) → Backend (Proxy เพิ่ม API key)
-app.use('/api/', requireApiKey);
+// TODO: Re-enable after fixing Railway deployment issue
+// app.use('/api/', requireApiKey);
 
 // Serve static files (uploaded images)
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
