@@ -1,5 +1,5 @@
 // Data Transfer Objects for Images
-
+//
 export class ImageDTO {
   constructor(image) {
     this.id = image.id;
