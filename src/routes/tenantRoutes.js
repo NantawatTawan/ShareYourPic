@@ -248,6 +248,8 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
     const tenant = req.tenant;
     const { session_id } = req.body;
 
+    console.log('[Payment Create] Tenant:', tenant.slug, 'Session:', session_id);
+
     // ตรวจสอบว่าต้องจ่ายเงินหรือไม่
     if (!tenant.payment_enabled) {
       return res.json({
@@ -257,9 +259,28 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
       });
     }
 
+    // ตรวจสอบว่ามี Stripe key หรือไม่
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('[Payment Create] STRIPE_SECRET_KEY not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Payment system is not configured'
+      });
+    }
+
     // ใช้ราคาจาก tenant settings
     const amount = tenant.price_amount;
-    const currency = tenant.price_currency;
+    const currency = tenant.price_currency || 'thb';
+
+    // Validate amount
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment amount'
+      });
+    }
+
+    console.log('[Payment Create] Amount:', amount, 'Currency:', currency);
 
     // กำหนด payment methods ที่รองรับตาม currency
     let paymentMethodTypes = ['card'];
@@ -272,28 +293,47 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
     // Link รองรับหลาย currency
     paymentMethodTypes.push('link');
 
+    console.log('[Payment Create] Payment methods:', paymentMethodTypes);
+
     // สร้าง PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency,
-      payment_method_types: paymentMethodTypes,
-      metadata: {
-        tenant_id: tenant.id,
-        tenant_slug: tenant.slug,
-        session_id: session_id || 'unknown'
-      }
-    });
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: currency.toLowerCase(),
+        payment_method_types: paymentMethodTypes,
+        metadata: {
+          tenant_id: tenant.id,
+          tenant_slug: tenant.slug,
+          session_id: session_id || 'unknown'
+        }
+      });
+      console.log('[Payment Create] PaymentIntent created:', paymentIntent.id);
+    } catch (stripeError) {
+      console.error('[Payment Create] Stripe error:', stripeError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create payment with Stripe: ' + stripeError.message
+      });
+    }
 
     // บันทึกลง database
-    await db.createPayment({
-      tenant_id: tenant.id,
-      stripe_payment_intent_id: paymentIntent.id,
-      amount,
-      currency,
-      status: 'pending',
-      session_id,
-      metadata: paymentIntent.metadata
-    });
+    try {
+      await db.createPayment({
+        tenant_id: tenant.id,
+        stripe_payment_intent_id: paymentIntent.id,
+        amount,
+        currency,
+        status: 'pending',
+        session_id,
+        metadata: paymentIntent.metadata
+      });
+      console.log('[Payment Create] Payment saved to database');
+    } catch (dbError) {
+      console.error('[Payment Create] Database error:', dbError.message);
+      // PaymentIntent already created, but DB save failed
+      // We should still return success so user can complete payment
+    }
 
     res.json({
       success: true,
@@ -304,10 +344,10 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
       currency
     });
   } catch (error) {
-    console.error('Create payment error:', error);
+    console.error('[Payment Create] Unexpected error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create payment'
+      message: 'Failed to create payment: ' + (error.message || 'Unknown error')
     });
   }
 });
