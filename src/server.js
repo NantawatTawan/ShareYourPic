@@ -19,6 +19,7 @@ import superAdminRoutes from './routes/superAdminRoutes.js';
 // Import utilities
 import { ensureUploadDirs } from './utils/fileHandler.js';
 import { requireApiKey } from './middleware/apiKeyAuth.js';
+import { recaptchaForCriticalRoutes } from './middleware/recaptchaAuth.js';
 
 dotenv.config();
 
@@ -74,7 +75,8 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
-// API Key Authentication - ป้องกันการเรียกใช้จาก Postman/tools อื่นๆ
+// API Key Authentication - ใช้ร่วมกับ Proxy Server
+// Frontend → Proxy (ไม่มี API key) → Backend (Proxy เพิ่ม API key)
 app.use('/api/', requireApiKey);
 
 // Serve static files (uploaded images)
