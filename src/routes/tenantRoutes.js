@@ -711,4 +711,49 @@ router.get('/:tenantSlug/admin/stats', loadTenant, authenticateAdmin, checkTenan
   }
 });
 
+// PUT /:tenantSlug/admin/settings - แก้ไข settings ของร้าน
+router.put('/:tenantSlug/admin/settings', loadTenant, authenticateAdmin, checkTenantAccess, async (req, res) => {
+  try {
+    const tenant = req.tenant;
+    const {
+      name,
+      description,
+      payment_enabled,
+      price_amount,
+      price_currency,
+      display_duration,
+      image_expiry_hours,
+      max_images_per_user,
+      theme_settings
+    } = req.body;
+
+    // สร้าง object สำหรับ update
+    const updates = {};
+
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (payment_enabled !== undefined) updates.payment_enabled = payment_enabled;
+    if (price_amount !== undefined) updates.price_amount = price_amount;
+    if (price_currency !== undefined) updates.price_currency = price_currency;
+    if (display_duration !== undefined) updates.display_duration = display_duration;
+    if (image_expiry_hours !== undefined) updates.image_expiry_hours = image_expiry_hours;
+    if (max_images_per_user !== undefined) updates.max_images_per_user = max_images_per_user;
+    if (theme_settings !== undefined) updates.theme_settings = theme_settings;
+
+    // อัปเดตข้อมูลใน database
+    const updatedTenant = await db.updateTenant(tenant.id, updates);
+
+    res.json({
+      success: true,
+      data: updatedTenant
+    });
+  } catch (error) {
+    console.error('Update settings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update settings'
+    });
+  }
+});
+
 export default router;
