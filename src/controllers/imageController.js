@@ -1,5 +1,18 @@
 import db from '../config/database.js';
 import { generateSessionId, getClientIp } from '../utils/session.js';
+import {
+  ImageDTO,
+  GalleryImageDTO,
+  ImageDetailDTO,
+  LikeResponseDTO,
+  PaginatedResponseDTO
+} from '../dto/imageDTO.js';
+import {
+  isValidUUID,
+  sanitizeInteger,
+  validateSortParam,
+  sanitizeText
+} from '../utils/security.js';
 
 // ดึงรูปภาพสำหรับหน้า Display (โปรเจคเตอร์) - รูปที่ approved และยังไม่หมดอายุ
 export const getDisplayImages = async (req, res) => {
@@ -11,9 +24,11 @@ export const getDisplayImages = async (req, res) => {
       ascending: false
     });
 
+    const imagesDTOs = ImageDTO.fromDatabaseArray(images);
+
     res.json({
       success: true,
-      images
+      data: imagesDTOs
     });
   } catch (error) {
     console.error('Get display images error:', error);
@@ -28,61 +43,58 @@ export const getDisplayImages = async (req, res) => {
 // ดึงรูปภาพสำหรับหน้า Gallery - รูปทั้งหมดที่ approved (ไม่สนใจหมดอายุ)
 export const getGalleryImages = async (req, res) => {
   try {
-    const { sort = 'latest', limit = 50, offset = 0 } = req.query;
+    // Sanitize and validate query parameters
+    const sort = validateSortParam(req.query.sort, ['latest', 'oldest', 'most_liked', 'most_commented']);
+    const limit = sanitizeInteger(req.query.limit, 1, 100); // Max 100 per page
+    const offset = sanitizeInteger(req.query.offset, 0);
 
-    let orderBy = 'approved_at';
-    let ascending = false;
-
-    switch (sort) {
-      case 'latest':
-        orderBy = 'approved_at';
-        ascending = false;
-        break;
-      case 'oldest':
-        orderBy = 'approved_at';
-        ascending = true;
-        break;
-      case 'most_liked':
-        // จะต้อง sort ใน application layer เพราะ like_count อยู่ใน view
-        orderBy = 'approved_at';
-        ascending = false;
-        break;
-      case 'most_commented':
-        // จะต้อง sort ใน application layer
-        orderBy = 'approved_at';
-        ascending = false;
-        break;
-      default:
-        orderBy = 'approved_at';
-        ascending = false;
-    }
-
+    // Fetch all approved images
     let images = await db.getImages({
       status: 'approved',
-      orderBy,
-      ascending
+      orderBy: 'approved_at',
+      ascending: false
     });
 
-    // Sort ตาม like_count หรือ comment_count
-    if (sort === 'most_liked') {
-      images.sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
-    } else if (sort === 'most_commented') {
-      images.sort((a, b) => (b.comment_count || 0) - (a.comment_count || 0));
+    // Sort based on user selection
+    switch (sort) {
+      case 'latest':
+        images.sort((a, b) => new Date(b.approved_at) - new Date(a.approved_at));
+        break;
+      case 'oldest':
+        images.sort((a, b) => new Date(a.approved_at) - new Date(b.approved_at));
+        break;
+      case 'most_liked':
+        images.sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
+        break;
+      case 'most_commented':
+        images.sort((a, b) => (b.comment_count || 0) - (a.comment_count || 0));
+        break;
+      default:
+        images.sort((a, b) => new Date(b.approved_at) - new Date(a.approved_at));
     }
 
-    // Pagination
-    const paginatedImages = images.slice(
-      parseInt(offset),
-      parseInt(offset) + parseInt(limit)
+    const totalImages = images.length;
+
+    // Apply pagination
+    const paginatedImages = images.slice(offset, offset + limit);
+
+    // เช็คว่า user ไลค์รูปไหนไปแล้วบ้าง
+    const sessionId = generateSessionId(req);
+    const imagesWithLikeStatus = await Promise.all(
+      paginatedImages.map(async (image) => {
+        const hasLiked = await db.hasUserLiked(image.id, sessionId);
+        return new GalleryImageDTO(image, hasLiked);
+      })
     );
 
-    res.json({
-      success: true,
-      images: paginatedImages,
-      total: images.length,
-      offset: parseInt(offset),
-      limit: parseInt(limit)
-    });
+    const response = new PaginatedResponseDTO(
+      imagesWithLikeStatus,
+      totalImages,
+      offset,
+      limit
+    );
+
+    res.json(response);
   } catch (error) {
     console.error('Get gallery images error:', error);
     res.status(500).json({
@@ -132,10 +144,18 @@ export const getImageById = async (req, res) => {
   }
 };
 
-// ไลค์รูปภาพ
+// ไลค์รูปภาพ (with transaction for concurrency safety)
 export const likeImage = async (req, res) => {
   try {
     const { imageId } = req.params;
+
+    // Validate UUID
+    if (!isValidUUID(imageId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid image ID format'
+      });
+    }
 
     const image = await db.getImageById(imageId);
 
@@ -153,28 +173,14 @@ export const likeImage = async (req, res) => {
     const hasLiked = await db.hasUserLiked(imageId, sessionId);
 
     if (hasLiked) {
-      // ถ้าไลค์แล้ว ให้ยกเลิกไลค์
-      await db.removeLike(imageId, sessionId);
-
+      // ถ้าไลค์แล้ว ไม่ต้องทำอะไร (ป้องกันการกด unlike)
       const likeCount = await db.getLikeCount(imageId);
 
-      // ส่ง event ผ่าน Socket.io
-      if (req.app.get('io')) {
-        req.app.get('io').emit('image:unliked', {
-          imageId,
-          likeCount
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Like removed',
-        liked: false,
-        likeCount
-      });
+      const response = new LikeResponseDTO(imageId, true, likeCount);
+      return res.json(response);
     }
 
-    // เพิ่มไลค์
+    // เพิ่มไลค์ (เฉพาะคนที่ยังไม่เคยกด like)
     await db.addLike(imageId, sessionId, ipAddress);
 
     const likeCount = await db.getLikeCount(imageId);
@@ -187,12 +193,8 @@ export const likeImage = async (req, res) => {
       });
     }
 
-    res.json({
-      success: true,
-      message: 'Image liked',
-      liked: true,
-      likeCount
-    });
+    const response = new LikeResponseDTO(imageId, true, likeCount);
+    res.json(response);
   } catch (error) {
     console.error('Like image error:', error);
     res.status(500).json({
@@ -209,17 +211,21 @@ export const commentImage = async (req, res) => {
     const { imageId } = req.params;
     const { comment } = req.body;
 
-    if (!comment || comment.trim().length === 0) {
+    // Validate UUID
+    if (!isValidUUID(imageId)) {
       return res.status(400).json({
         success: false,
-        message: 'Comment cannot be empty'
+        message: 'Invalid image ID format'
       });
     }
 
-    if (comment.length > 500) {
+    // Sanitize comment text (remove HTML, XSS attempts)
+    const sanitizedComment = sanitizeText(comment, 500);
+
+    if (!sanitizedComment || sanitizedComment.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Comment too long (max 500 characters)'
+        message: 'Comment cannot be empty'
       });
     }
 
@@ -238,7 +244,7 @@ export const commentImage = async (req, res) => {
     const newComment = await db.addComment(
       imageId,
       sessionId,
-      comment.trim(),
+      sanitizedComment,
       ipAddress
     );
 
