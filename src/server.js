@@ -13,6 +13,8 @@ import { fileURLToPath } from 'url';
 import uploadRoutes from './routes/uploadRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import imageRoutes from './routes/imageRoutes.js';
+import tenantRoutes from './routes/tenantRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
 
 // Import utilities
 import { ensureUploadDirs } from './utils/fileHandler.js';
@@ -76,9 +78,14 @@ app.use('/uploads', express.static(uploadDir));
 app.set('io', io);
 
 // Routes
+// Legacy routes (backwards compatibility - optional, ลบได้ถ้าไม่ต้องการ)
 app.use('/api', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/images', imageRoutes);
+
+// New multi-tenant routes
+app.use('/api', tenantRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
