@@ -55,13 +55,16 @@ export const getGalleryImages = async (req, res) => {
       ascending: false
     });
 
-    console.log('[Gallery] Sort by:', sort);
-    console.log('[Gallery] Images before sort:', images.slice(0, 3).map(img => ({
+    console.log('='.repeat(60));
+    console.log('🔍 [GALLERY SORT DEBUG] Sort by:', sort);
+    console.log('🔍 [GALLERY SORT DEBUG] Total images:', images.length);
+    console.log('🔍 [GALLERY SORT DEBUG] Images before sort:', images.slice(0, 3).map(img => ({
       id: img.id.substring(0, 8),
       likes: img.like_count,
       comments: img.comment_count,
       approved: img.approved_at
     })));
+    console.log('='.repeat(60));
 
     // Sort based on user selection
     switch (sort) {
@@ -81,12 +84,13 @@ export const getGalleryImages = async (req, res) => {
         images.sort((a, b) => new Date(b.approved_at) - new Date(a.approved_at));
     }
 
-    console.log('[Gallery] Images after sort:', images.slice(0, 3).map(img => ({
+    console.log('✅ [GALLERY SORT DEBUG] Images after sort:', images.slice(0, 3).map(img => ({
       id: img.id.substring(0, 8),
       likes: img.like_count,
       comments: img.comment_count,
       approved: img.approved_at
     })));
+    console.log('='.repeat(60));
 
     const totalImages = images.length;
 
