@@ -123,7 +123,9 @@ router.post('/:tenantSlug/payment/create', loadTenant, async (req, res) => {
 router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
   try {
     const tenant = req.tenant;
-    const { paymentIntentId, session_id } = req.body;
+    const { paymentIntentId, session_id, caption } = req.body;
+
+    console.log('[Upload] Tenant:', tenant.slug, 'Payment enabled:', tenant.payment_enabled, 'PaymentIntentId:', paymentIntentId, 'Caption:', caption);
 
     // ตรวจสอบว่าต้องจ่ายเงินหรือไม่
     if (tenant.payment_enabled) {
@@ -284,10 +286,22 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
     // Get image metadata
     const metadata = await sharp(imageFile.data).metadata();
 
+    // Get payment_id if payment was made
+    let payment_id = null;
+    if (tenant.payment_enabled && paymentIntentId) {
+      try {
+        const payment = await db.getPaymentByStripeId(paymentIntentId);
+        payment_id = payment.id;
+      } catch (err) {
+        console.error('[Upload] Failed to get payment record:', err.message);
+        // Continue without payment_id - don't block upload
+      }
+    }
+
     // สร้าง record ใน database
     const image = await db.createImage({
       tenant_id: tenant.id,
-      payment_id: tenant.payment_enabled ? (await db.getPaymentByStripeId(paymentIntentId)).id : null,
+      payment_id,
       filename,
       original_filename: imageFile.name,
       file_url: fileUrl,
@@ -296,9 +310,12 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
       mime_type: imageFile.mimetype,
       width: metadata.width,
       height: metadata.height,
+      caption: caption || null,
       status: 'pending',
       upload_session_id: session_id
     });
+
+    console.log('[Upload] Image created successfully:', image.id);
 
     res.json({
       success: true,
