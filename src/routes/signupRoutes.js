@@ -233,20 +233,16 @@ router.post('/signup/create-payment', async (req, res) => {
       },
     });
 
-    // Create Payment Intent with multiple payment methods
+    // Create Payment Intent with card and PromptPay
     const paymentIntent = await stripe.paymentIntents.create({
       amount: plan.price_amount,
       currency: plan.price_currency,
       customer: customer.id,
       receipt_email: ownerEmail,
-      // Temporarily use only 'card' for testing
-      // TODO: Enable other payment methods after configuring Stripe
-      payment_method_types: ['card'],
-      // payment_method_types: [
-      //   'card',           // บัตรเครดิต/เดบิต
-      //   'promptpay',      // PromptPay (ต้องเปิดใน Stripe Dashboard)
-      //   'grabpay',        // GrabPay (ต้องลงทะเบียน Stripe Connector)
-      // ],
+      payment_method_types: [
+        'card',           // บัตรเครดิต/เดบิต
+        'promptpay',      // PromptPay QR Code
+      ],
       metadata: {
         plan_key: planKey,
         plan_name: plan.name,
