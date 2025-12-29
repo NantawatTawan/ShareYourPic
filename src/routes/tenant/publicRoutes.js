@@ -8,6 +8,35 @@ const router = express.Router();
 // PUBLIC ROUTES (ไม่ต้อง authenticate)
 // ===========================================
 
+// GET /tenants/public - ดึงรายการ tenants ทั้งหมด (สำหรับ landing page)
+router.get('/tenants/public', async (req, res) => {
+  try {
+    // ดึงเฉพาะ tenant ที่ active อย่างเดียว (ไม่สนใจ is_public เพราะ feature นี้อาจยังไม่มี)
+    const tenants = await db.getAllTenants({ is_active: true });
+
+    // Map tenants to public data only
+    const publicTenants = tenants.map(tenant => ({
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+      description: tenant.description,
+      theme: {
+        primaryColor: tenant.theme_settings?.primaryColor,
+        secondaryColor: tenant.theme_settings?.secondaryColor,
+      },
+      created_at: tenant.created_at
+    }));
+
+    res.json(publicTenants);
+  } catch (error) {
+    console.error('Get public tenants error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to load tenants'
+    });
+  }
+});
+
 // GET /:tenantSlug/theme - ดึง theme settings
 router.get('/:tenantSlug/theme', loadTenant, async (req, res) => {
   try {
