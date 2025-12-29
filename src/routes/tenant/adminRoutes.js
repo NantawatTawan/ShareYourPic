@@ -90,6 +90,61 @@ router.put('/:tenantSlug/admin/images/:imageId/reject', loadTenant, authenticate
   }
 });
 
+// PUT /:tenantSlug/admin/images/:imageId/extend - ขยายเวลาหมดอายุรูป
+router.put('/:tenantSlug/admin/images/:imageId/extend', loadTenant, authenticateAdmin, checkTenantAccess, async (req, res) => {
+  try {
+    const tenant = req.tenant;
+    const { imageId } = req.params;
+    const { hours } = req.body; // จำนวนชั่วโมงที่จะเพิ่ม (default: 1)
+
+    // ดึงข้อมูลรูปเดิม
+    const currentImage = await db.getImageById(imageId, tenant.id);
+    if (!currentImage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Image not found'
+      });
+    }
+
+    // คำนวณ expires_at ใหม่
+    // ถ้า expires_at เดิมเป็น null ให้เริ่มนับจากตอนนี้
+    // ถ้า expires_at เดิมยังไม่หมด ให้บวกเพิ่มจากเดิม
+    // ถ้า expires_at เดิมหมดแล้ว ให้เริ่มนับจากตอนนี้ใหม่
+    const hoursToAdd = parseInt(hours) || 1;
+    let newExpiresAt;
+
+    const now = new Date();
+    const currentExpiry = currentImage.expires_at ? new Date(currentImage.expires_at) : null;
+
+    if (currentExpiry && currentExpiry > now) {
+      // ยังไม่หมดอายุ: บวกเพิ่ม
+      newExpiresAt = new Date(currentExpiry.getTime() + (hoursToAdd * 60 * 60 * 1000));
+    } else {
+      // หมดอายุแล้ว หรือยังไม่มีวันหมดอายุ: เริ่มนับใหม่จากตอนนี้
+      newExpiresAt = new Date(now.getTime() + (hoursToAdd * 60 * 60 * 1000));
+    }
+
+    const image = await db.updateImage(imageId, {
+      expires_at: newExpiresAt.toISOString()
+    });
+
+    // Emit socket event (optional - เพื่อให้ display page รู้ว่ามีการ update)
+    const io = req.app.get('io');
+    io.emit('image:approved', { imageId, image }); // ใช้ event เดิมเพื่อให้ client reload
+
+    res.json({
+      success: true,
+      data: image
+    });
+  } catch (error) {
+    console.error('Extend image expiry error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to extend image expiry'
+    });
+  }
+});
+
 // DELETE /:tenantSlug/admin/images/:imageId - ลบรูป
 router.delete('/:tenantSlug/admin/images/:imageId', loadTenant, authenticateAdmin, checkTenantAccess, async (req, res) => {
   try {
