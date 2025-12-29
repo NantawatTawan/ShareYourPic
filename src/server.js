@@ -15,6 +15,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import imageRoutes from './routes/imageRoutes.js';
 import tenantRoutes from './routes/tenantRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
+import signupRoutes from './routes/signupRoutes.js';
 
 // Import utilities
 import { ensureUploadDirs } from './utils/fileHandler.js';
@@ -143,6 +144,9 @@ app.use('/uploads', express.static(uploadDir));
 app.set('io', io);
 
 // Routes
+// Public routes (no auth required)
+app.use('/api', signupRoutes);
+
 // Legacy routes (backwards compatibility - optional, ลบได้ถ้าไม่ต้องการ)
 app.use('/api', uploadRoutes);
 app.use('/api/admin', adminRoutes);
