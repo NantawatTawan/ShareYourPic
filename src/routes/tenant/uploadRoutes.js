@@ -129,10 +129,12 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
 
     // ตรวจสอบว่าต้องจ่ายเงินหรือไม่
     if (tenant.payment_enabled) {
-      if (!paymentIntentId) {
+      console.log('[Upload] Payment is required. Checking payment...');
+
+      if (!paymentIntentId || paymentIntentId === 'null' || paymentIntentId === 'undefined') {
         return res.status(400).json({
           success: false,
-          message: 'Payment is required'
+          message: 'Payment is required for this tenant'
         });
       }
 
@@ -172,6 +174,8 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
         console.error('[Upload] Failed to update payment status:', dbError.message);
         // Don't block upload if DB update fails
       }
+    } else {
+      console.log('[Upload] Free upload - no payment required');
     }
 
     // ตรวจสอบไฟล์
