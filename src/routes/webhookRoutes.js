@@ -1,7 +1,16 @@
 import express from 'express';
 import { stripe } from '../config/stripe.js';
 import { supabase } from '../config/database.js';
-import { sendPaymentReceipt, sendExpiryWarning } from '../services/emailService.js';
+// Lazy load to avoid ESM dependency issues
+async function sendPaymentReceipt(data) {
+  const { sendPaymentReceipt: send } = await import('../services/emailService.js');
+  return send(data);
+}
+
+async function sendExpiryWarning(data) {
+  const { sendExpiryWarning: send } = await import('../services/emailService.js');
+  return send(data);
+}
 
 const router = express.Router();
 
@@ -19,7 +28,13 @@ router.post(
     let event;
 
     try {
-      // Verify webhook signature
+      // SECURITY: Webhook secret is REQUIRED - no bypass in any environment
+      if (!webhookSecret) {
+        console.error('CRITICAL: STRIPE_WEBHOOK_SECRET not configured');
+        return res.status(500).json({ error: 'Webhook not configured' });
+      }
+
+      // SECURITY: Verify webhook signature
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err) {
       console.error('Webhook signature verification failed:', err.message);

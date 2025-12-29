@@ -3,7 +3,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Security: JWT_SECRET is required, no fallback
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL: JWT_SECRET environment variable must be set');
+}
 
 // Middleware สำหรับตรวจสอบ JWT token สำหรับ Admin
 export const authenticateAdmin = async (req, res, next) => {
@@ -46,9 +51,17 @@ export const authenticateAdmin = async (req, res, next) => {
   }
 };
 
-// สร้าง JWT token
+// สร้าง JWT token (include tenant_id and is_super_admin for stateless auth)
 export const generateToken = (payload) => {
-  return jwt.sign(payload, JWT_SECRET, {
+  // Ensure critical fields are included
+  const tokenPayload = {
+    id: payload.id,
+    username: payload.username,
+    tenant_id: payload.tenant_id || null,
+    is_super_admin: payload.is_super_admin || false
+  };
+
+  return jwt.sign(tokenPayload, JWT_SECRET, {
     expiresIn: '24h'
   });
 };

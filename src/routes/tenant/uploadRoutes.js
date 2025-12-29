@@ -188,7 +188,18 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
 
     const imageFile = req.files.image;
 
-    // Validate file type
+    // SECURITY: Validate file extension (client-controlled)
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+    const fileExt = path.extname(imageFile.name).toLowerCase();
+
+    if (!allowedExtensions.includes(fileExt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file extension. Only .jpg, .jpeg, .png, and .webp are allowed'
+      });
+    }
+
+    // SECURITY: Validate MIME type (client-controlled)
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(imageFile.mimetype)) {
       return res.status(400).json({
@@ -197,9 +208,25 @@ router.post('/:tenantSlug/upload', loadTenant, async (req, res) => {
       });
     }
 
-    // สร้างชื่อไฟล์
-    const fileExt = path.extname(imageFile.name);
-    const filename = `${crypto.randomUUID()}${fileExt}`;
+    // SECURITY: Validate actual file content using Sharp (will fail if not a valid image)
+    try {
+      const metadata = await sharp(imageFile.data).metadata();
+      const validFormats = ['jpeg', 'png', 'webp'];
+      if (!validFormats.includes(metadata.format)) {
+        return res.status(400).json({
+          success: false,
+          message: 'File content does not match expected image format'
+        });
+      }
+    } catch (imageError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or corrupted image file'
+      });
+    }
+
+    // สร้างชื่อไฟล์ (always use .jpg for processed images)
+    const filename = `${crypto.randomUUID()}.jpg`;
 
     // ใช้ Supabase Storage หรือ local storage
     const useSupabaseStorage = process.env.USE_SUPABASE_STORAGE === 'true';

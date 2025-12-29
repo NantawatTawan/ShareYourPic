@@ -79,8 +79,8 @@ export async function checkQuota(tenantId) {
     if (countError) {
       console.error('Error counting images:', countError);
       return {
-        allowed: true, // Allow on error (don't block user)
-        reason: 'Error checking quota',
+        allowed: false, // SECURITY: Deny on error (fail closed)
+        reason: 'Unable to verify quota. Please try again.',
         usage: null,
       };
     }
@@ -117,8 +117,8 @@ export async function checkQuota(tenantId) {
   } catch (error) {
     console.error('Error in checkQuota:', error);
     return {
-      allowed: true, // Allow on error (don't block user)
-      reason: 'Error checking quota',
+      allowed: false, // SECURITY: Deny on error (fail closed)
+      reason: 'Unable to verify quota. Please try again.',
       usage: null,
     };
   }

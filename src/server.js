@@ -111,17 +111,46 @@ app.use(fileUpload({
   responseOnLimit: 'File size exceeds the maximum limit'
 }));
 
-// Rate limiting - ปรับให้หลวมสำหรับ test deployment
-const limiter = rateLimit({
+// Rate limiting - PRODUCTION SECURITY
+// General API rate limit
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // เพิ่มเป็น 1000 requests ต่อ 15 นาที (สำหรับ test/development)
+  max: 100, // 100 requests per 15 minutes per IP
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false }
 });
 
-app.use('/api/', limiter);
+// Strict rate limit for login endpoints
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 login attempts per 15 minutes
+  message: 'Too many login attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful logins
+});
+
+// Rate limit for file uploads
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 uploads per minute
+  message: 'Too many upload requests, please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limit for likes/comments (prevent spam)
+const interactionLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 interactions per minute
+  message: 'Too many interactions, please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', apiLimiter);
 
 // Health check endpoint - ต้องอยู่ก่อน requireApiKey middleware!
 // Railway/Vercel/Heroku ใช้ health check โดยไม่มี API key
@@ -145,18 +174,23 @@ app.use('/uploads', express.static(uploadDir));
 // Store io instance in app for use in controllers
 app.set('io', io);
 
+// Export rate limiters for use in routes
+app.set('loginLimiter', loginLimiter);
+app.set('uploadLimiter', uploadLimiter);
+app.set('interactionLimiter', interactionLimiter);
+
 // Routes
-// Public routes (no auth required)
+// Public routes (no auth required, but rate limited)
 app.use('/api', signupRoutes);
 
 // Legacy routes (backwards compatibility - optional, ลบได้ถ้าไม่ต้องการ)
 app.use('/api', uploadRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', loginLimiter, adminRoutes); // Apply login limiter to admin routes
 app.use('/api/images', imageRoutes);
 
 // New multi-tenant routes
 app.use('/api', tenantRoutes);
-app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/super-admin', loginLimiter, superAdminRoutes); // Apply login limiter
 app.use('/api/quota', quotaRoutes);
 
 // 404 handler

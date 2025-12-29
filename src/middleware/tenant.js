@@ -12,6 +12,23 @@ export const loadTenant = async (req, res, next) => {
       });
     }
 
+    // SECURITY: Validate slug format (prevent path traversal and injection)
+    // Only allow lowercase letters, numbers, and hyphens
+    if (!/^[a-z0-9-]+$/.test(tenantSlug)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant slug format. Only lowercase letters, numbers, and hyphens are allowed.'
+      });
+    }
+
+    // SECURITY: Prevent path traversal attempts
+    if (tenantSlug.includes('..') || tenantSlug.includes('/') || tenantSlug.includes('\\')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant slug format'
+      });
+    }
+
     // ดึงข้อมูล tenant พร้อม subscription
     const { data: tenant, error } = await db.supabase
       .from('tenants')

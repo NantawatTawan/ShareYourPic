@@ -68,7 +68,17 @@ export const login = async (req, res) => {
 // ดึงรูปภาพที่รอการตรวจสอบ
 export const getPendingImages = async (req, res) => {
   try {
+    // SECURITY: Filter by admin's tenant_id to prevent cross-tenant access
+    const admin = req.admin;
+    if (!admin || !admin.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
     const images = await db.getImages({
+      tenant_id: admin.tenant_id, // SECURITY: Only get images from admin's tenant
       status: 'pending',
       orderBy: 'uploaded_at',
       ascending: true
@@ -91,9 +101,19 @@ export const getPendingImages = async (req, res) => {
 // ดึงรูปภาพทั้งหมด (สำหรับ admin)
 export const getAllImages = async (req, res) => {
   try {
+    // SECURITY: Filter by admin's tenant_id to prevent cross-tenant access
+    const admin = req.admin;
+    if (!admin || !admin.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
     const { status, limit = 100, offset = 0 } = req.query;
 
     const filters = {
+      tenant_id: admin.tenant_id, // SECURITY: Only get images from admin's tenant
       orderBy: 'uploaded_at',
       ascending: false
     };
@@ -123,7 +143,15 @@ export const getAllImages = async (req, res) => {
 export const approveImage = async (req, res) => {
   try {
     const { imageId } = req.params;
-    const adminId = req.admin.id;
+    const admin = req.admin;
+
+    // SECURITY: Check authentication
+    if (!admin || !admin.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
 
     const image = await db.getImageById(imageId);
 
@@ -131,6 +159,14 @@ export const approveImage = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Image not found'
+      });
+    }
+
+    // SECURITY: Verify image belongs to admin's tenant
+    if (image.tenant_id !== admin.tenant_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to approve this image'
       });
     }
 
@@ -144,7 +180,7 @@ export const approveImage = async (req, res) => {
     // อนุมัติรูปภาพ (expires_at จะถูกตั้งค่าอัตโนมัติโดย trigger ในฐานข้อมูล)
     const updatedImage = await db.updateImage(imageId, {
       status: 'approved',
-      approved_by: adminId
+      approved_by: admin.id
     });
 
     // ส่ง event ผ่าน Socket.io (จะทำใน server.js)
@@ -172,6 +208,15 @@ export const rejectImage = async (req, res) => {
   try {
     const { imageId } = req.params;
     const { reason } = req.body;
+    const admin = req.admin;
+
+    // SECURITY: Check authentication
+    if (!admin || !admin.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
 
     const image = await db.getImageById(imageId);
 
@@ -179,6 +224,14 @@ export const rejectImage = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Image not found'
+      });
+    }
+
+    // SECURITY: Verify image belongs to admin's tenant
+    if (image.tenant_id !== admin.tenant_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to reject this image'
       });
     }
 
@@ -217,6 +270,15 @@ export const rejectImage = async (req, res) => {
 export const deleteImageById = async (req, res) => {
   try {
     const { imageId } = req.params;
+    const admin = req.admin;
+
+    // SECURITY: Check authentication
+    if (!admin || !admin.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
 
     const image = await db.getImageById(imageId);
 
@@ -224,6 +286,14 @@ export const deleteImageById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Image not found'
+      });
+    }
+
+    // SECURITY: Verify image belongs to admin's tenant
+    if (image.tenant_id !== admin.tenant_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete this image'
       });
     }
 
@@ -250,7 +320,20 @@ export const deleteImageById = async (req, res) => {
 // สถิติ
 export const getStats = async (req, res) => {
   try {
-    const allImages = await db.getImages({});
+    const admin = req.admin;
+
+    // SECURITY: Check authentication
+    if (!admin || !admin.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // SECURITY: Filter stats by admin's tenant_id
+    const allImages = await db.getImages({
+      tenant_id: admin.tenant_id
+    });
 
     const stats = {
       total: allImages.length,

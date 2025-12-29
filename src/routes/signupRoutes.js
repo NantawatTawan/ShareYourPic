@@ -3,7 +3,19 @@ import bcrypt from 'bcrypt';
 import { supabase } from '../config/database.js';
 import { stripe } from '../config/stripe.js';
 import { PRICING_PLANS } from '../config/pricing.js';
-import { sendWelcomeEmail, sendPaymentReceipt } from '../services/emailService.js';
+// Temporarily comment out to fix ESM issue
+// import { sendWelcomeEmail, sendPaymentReceipt } from '../services/emailService.js';
+
+// Lazy load to avoid ESM dependency issues
+async function sendWelcomeEmail(data) {
+  const { sendWelcomeEmail: send } = await import('../services/emailService.js');
+  return send(data);
+}
+
+async function sendPaymentReceipt(data) {
+  const { sendPaymentReceipt: send } = await import('../services/emailService.js');
+  return send(data);
+}
 
 const router = express.Router();
 
@@ -184,13 +196,9 @@ router.post('/signup/trial', async (req, res) => {
       });
     } catch (emailError) {
       console.error('Failed to send welcome email:', emailError);
-      // Don't fail the signup if email fails, but log credentials
-      console.log('Trial account credentials (email failed):', {
-        tenant: tenant.slug,
-        username,
-        password,
-        loginUrl: `/${tenant.slug}/admin/login`,
-      });
+      // SECURITY: NEVER log passwords, even when email fails
+      console.error('WARNING: Email delivery failed for tenant:', tenant.slug);
+      // TODO: Implement alternative credential delivery (SMS, manual process, etc.)
     }
 
     res.json({
