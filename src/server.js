@@ -150,6 +150,21 @@ const interactionLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Admin rate limiter - more permissive for dashboard
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // 500 requests per 15 minutes for admin
+  message: 'Too many admin requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiters BEFORE routes
+// Admin routes get higher limit
+app.use('/api/:tenantSlug/admin', adminLimiter);
+app.use('/api/admin', adminLimiter);
+
+// General API limiter for everything else
 app.use('/api/', apiLimiter);
 
 // Health check endpoint - ต้องอยู่ก่อน requireApiKey middleware!
