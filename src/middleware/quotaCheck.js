@@ -64,6 +64,12 @@ export async function checkQuota(tenantId) {
       };
     }
 
+    // Get max uploads from features
+    // For one-time plans: features.max_uploads
+    // For subscription plans: features.max_uploads_per_month
+    const features = plan.features || {};
+    const maxUploads = features.max_uploads || features.max_uploads_per_month || -1;
+
     // Count current images
     const { count: imageCount, error: countError } = await supabase
       .from('images')
@@ -79,15 +85,16 @@ export async function checkQuota(tenantId) {
       };
     }
 
-    // Check image limit
-    if (plan.max_images !== -1 && imageCount >= plan.max_images) {
+    // Check image limit (-1 means unlimited)
+    if (maxUploads !== -1 && imageCount >= maxUploads) {
       return {
         allowed: false,
         reason: 'Image limit reached',
         usage: {
           current: imageCount,
-          limit: plan.max_images,
+          limit: maxUploads,
           plan: plan.name,
+          storage_limit_gb: features.storage_gb || 0,
         },
       };
     }
@@ -101,9 +108,10 @@ export async function checkQuota(tenantId) {
       reason: 'OK',
       usage: {
         current: imageCount,
-        limit: plan.max_images,
+        limit: maxUploads,
         plan: plan.name,
         period_end: periodEnd,
+        storage_limit_gb: features.storage_gb || 0,
       },
     };
   } catch (error) {
