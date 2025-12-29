@@ -233,12 +233,18 @@ router.post('/signup/create-payment', async (req, res) => {
       },
     });
 
-    // Create Payment Intent
+    // Create Payment Intent with multiple payment methods
     const paymentIntent = await stripe.paymentIntents.create({
       amount: plan.price_amount,
       currency: plan.price_currency,
       customer: customer.id,
       receipt_email: ownerEmail,
+      payment_method_types: [
+        'card',           // บัตรเครดิต/เดบิต
+        'promptpay',      // PromptPay
+        'paynow',         // PayNow (Singapore)
+        'grabpay',        // GrabPay
+      ],
       metadata: {
         plan_key: planKey,
         plan_name: plan.name,
