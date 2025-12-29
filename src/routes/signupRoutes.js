@@ -47,12 +47,18 @@ router.get('/check-slug/:slug', async (req, res) => {
       .eq('slug', slug)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 = not found (which is good)
+    // PGRST116 = not found (slug is available)
+    if (error && error.code === 'PGRST116') {
+      return res.json({ available: true });
+    }
+
+    // Other errors
+    if (error) {
       throw error;
     }
 
-    res.json({ available: !data });
+    // If data exists, slug is taken
+    res.json({ available: false });
   } catch (error) {
     console.error('Error checking slug:', error);
     res.status(500).json({ error: 'Failed to check slug availability' });
