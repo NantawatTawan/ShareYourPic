@@ -29,7 +29,28 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+      if (!origin) return callback(null, true);
+
+      try {
+        const originUrl = new URL(origin);
+        const allowedUrl = new URL(allowedOrigin);
+        
+        const originHost = originUrl.hostname.replace(/^www\./, '');
+        const allowedHost = allowedUrl.hostname.replace(/^www\./, '');
+        
+        if (originHost === allowedHost) {
+          return callback(null, true);
+        }
+      } catch (error) {
+        console.error('Socket CORS parsing error:', error);
+      }
+
+      if (origin === allowedOrigin) return callback(null, true);
+      
+      callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST']
   }
 });
@@ -45,7 +66,32 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    try {
+      const originUrl = new URL(origin);
+      const allowedUrl = new URL(allowedOrigin);
+      
+      // Normalize hostnames by removing 'www.' prefix
+      const originHost = originUrl.hostname.replace(/^www\./, '');
+      const allowedHost = allowedUrl.hostname.replace(/^www\./, '');
+      
+      // Compare normalized hostnames
+      if (originHost === allowedHost) {
+        return callback(null, true);
+      }
+    } catch (error) {
+      console.error('CORS URL parsing error:', error);
+    }
+
+    if (origin === allowedOrigin) return callback(null, true);
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 
