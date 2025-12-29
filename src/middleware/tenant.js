@@ -12,10 +12,16 @@ export const loadTenant = async (req, res, next) => {
       });
     }
 
-    // ดึงข้อมูล tenant จาก database
+    // ดึงข้อมูล tenant พร้อม subscription
     const { data: tenant, error } = await db.supabase
       .from('tenants')
-      .select('*')
+      .select(`
+        *,
+        subscriptions (
+          *,
+          subscription_plans (*)
+        )
+      `)
       .eq('slug', tenantSlug)
       .eq('is_active', true)
       .single();
@@ -27,8 +33,52 @@ export const loadTenant = async (req, res, next) => {
       });
     }
 
-    // เก็บข้อมูล tenant ไว้ใน request object
+    // เช็ค subscription
+    const activeSubscription = tenant.subscriptions?.find(sub => sub.status === 'active');
+
+    if (!activeSubscription) {
+      return res.status(403).json({
+        success: false,
+        message: 'Subscription expired or not found',
+        redirect: '/pricing', // ให้ frontend redirect ไป pricing
+      });
+    }
+
+    // เช็ควันหมดอายุ
+    const now = new Date();
+    const periodEnd = new Date(activeSubscription.current_period_end);
+
+    if (now > periodEnd) {
+      // อัพเดทสถานะเป็น expired
+      await db.supabase
+        .from('subscriptions')
+        .update({ status: 'expired' })
+        .eq('id', activeSubscription.id);
+
+      await db.supabase
+        .from('tenants')
+        .update({ is_active: false })
+        .eq('id', tenant.id);
+
+      return res.status(403).json({
+        success: false,
+        message: 'Subscription expired on ' + periodEnd.toLocaleDateString('th-TH'),
+        expired_at: periodEnd,
+        redirect: '/pricing',
+      });
+    }
+
+    // เก็บข้อมูล tenant, subscription, plan ไว้ใน request object
     req.tenant = tenant;
+    req.subscription = activeSubscription;
+    req.plan = activeSubscription.subscription_plans;
+
+    // เช็คว่าใกล้หมดอายุไหม (7 วัน)
+    const diffTime = periodEnd - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    req.daysUntilExpiry = diffDays;
+    req.isExpiringSoon = diffDays <= 7 && diffDays > 0;
+
     next();
   } catch (error) {
     console.error('Load tenant error:', error);

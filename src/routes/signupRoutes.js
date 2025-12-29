@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { supabase } from '../config/database.js';
 import { stripe } from '../config/stripe.js';
 import { PRICING_PLANS } from '../config/pricing.js';
+import { sendWelcomeEmail, sendPaymentReceipt } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -155,13 +156,42 @@ router.post('/signup/trial', async (req, res) => {
 
     if (adminError) throw adminError;
 
-    // TODO: Send email with credentials
-    console.log('Trial account created:', {
-      tenant: tenant.slug,
-      username,
-      password,
-      loginUrl: `/${tenant.slug}/admin/login`,
-    });
+    // Send welcome email with credentials
+    try {
+      await sendWelcomeEmail({
+        to: ownerEmail,
+        shopName,
+        shopSlug,
+        username,
+        password,
+        planName: trialPlan.data.name,
+        expiryDate: new Date(subscription.current_period_end).toLocaleDateString('th-TH', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+      });
+
+      // Mark credentials as sent
+      await supabase
+        .from('subscriptions')
+        .update({ credentials_sent: true })
+        .eq('id', subscription.id);
+
+      console.log('Trial account created and email sent:', {
+        tenant: tenant.slug,
+        email: ownerEmail,
+      });
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
+      // Don't fail the signup if email fails, but log credentials
+      console.log('Trial account credentials (email failed):', {
+        tenant: tenant.slug,
+        username,
+        password,
+        loginUrl: `/${tenant.slug}/admin/login`,
+      });
+    }
 
     res.json({
       success: true,
@@ -169,11 +199,6 @@ router.post('/signup/trial', async (req, res) => {
         id: tenant.id,
         slug: tenant.slug,
         name: tenant.name,
-      },
-      credentials: {
-        username,
-        password, // ⚠️ WARNING: Don't send in production, use email instead
-        loginUrl: `/${tenant.slug}/admin/login`,
       },
       message: 'Trial account created successfully. Check your email for login details.',
     });
@@ -390,13 +415,59 @@ router.post('/signup/complete', async (req, res) => {
       paid_at: new Date().toISOString(),
     });
 
-    // TODO: Send email with credentials
-    console.log('Paid account created:', {
-      tenant: tenant.slug,
-      username,
-      password,
-      loginUrl: `/${tenant.slug}/admin/login`,
-    });
+    // Send welcome email with credentials
+    try {
+      await sendWelcomeEmail({
+        to: metadata.owner_email,
+        shopName: metadata.shop_name,
+        shopSlug,
+        username,
+        password,
+        planName: plan.name,
+        expiryDate: currentPeriodEnd.toLocaleDateString('th-TH', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+      });
+
+      // Send payment receipt
+      await sendPaymentReceipt({
+        to: metadata.owner_email,
+        shopName: metadata.shop_name,
+        planName: plan.name,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        paymentIntentId: paymentIntent.id,
+        paidAt: new Date().toLocaleDateString('th-TH', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      });
+
+      // Mark credentials as sent
+      await supabase
+        .from('subscriptions')
+        .update({ credentials_sent: true })
+        .eq('id', subscription.id);
+
+      console.log('Paid account created and emails sent:', {
+        tenant: tenant.slug,
+        email: metadata.owner_email,
+      });
+    } catch (emailError) {
+      console.error('Failed to send emails:', emailError);
+      // Don't fail the signup if email fails, but log credentials
+      console.log('Paid account credentials (email failed):', {
+        tenant: tenant.slug,
+        username,
+        password,
+        loginUrl: `/${tenant.slug}/admin/login`,
+      });
+    }
 
     res.json({
       success: true,
@@ -404,11 +475,6 @@ router.post('/signup/complete', async (req, res) => {
         id: tenant.id,
         slug: tenant.slug,
         name: tenant.name,
-      },
-      credentials: {
-        username,
-        password, // ⚠️ WARNING: Don't send in production, use email instead
-        loginUrl: `/${tenant.slug}/admin/login`,
       },
       message: 'Account created successfully. Check your email for login details.',
     });

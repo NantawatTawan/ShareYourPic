@@ -16,6 +16,8 @@ import imageRoutes from './routes/imageRoutes.js';
 import tenantRoutes from './routes/tenantRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import signupRoutes from './routes/signupRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
+import quotaRoutes from './routes/quotaRoutes.js';
 
 // Import utilities
 import { ensureUploadDirs } from './utils/fileHandler.js';
@@ -97,7 +99,7 @@ app.use(cors({
 }));
 
 // Stripe webhook route - ต้องอยู่ก่อน express.json() เพื่อใช้ raw body
-app.use('/api/webhook/stripe', express.raw({ type: 'application/json' }), tenantRoutes);
+app.use('/api/stripe', webhookRoutes);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -155,6 +157,7 @@ app.use('/api/images', imageRoutes);
 // New multi-tenant routes
 app.use('/api', tenantRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/quota', quotaRoutes);
 
 // 404 handler
 app.use((req, res) => {
