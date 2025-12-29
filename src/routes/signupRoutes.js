@@ -484,7 +484,12 @@ router.post('/signup/complete', async (req, res) => {
         slug: tenant.slug,
         name: tenant.name,
       },
-      message: 'Account created successfully. Check your email for login details.',
+      credentials: {
+        username,
+        password,
+        loginUrl: `/${tenant.slug}/admin/login`,
+      },
+      message: 'Account created successfully! Please save your login credentials.',
     });
   } catch (error) {
     console.error('Error completing signup:', error);

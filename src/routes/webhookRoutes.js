@@ -87,7 +87,7 @@ async function handlePaymentSucceeded(paymentIntent) {
   // Find subscription by payment intent ID
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('*, tenants(*)')
+    .select('*, tenants(*), subscription_plans(*)')
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .single();
 
@@ -114,6 +114,29 @@ async function handlePaymentSucceeded(paymentIntent) {
   });
 
   console.log('Payment recorded for subscription:', subscription.id);
+
+  // Send payment receipt email
+  try {
+    await sendPaymentReceipt({
+      to: subscription.tenants.owner_email,
+      shopName: subscription.tenants.name,
+      shopSlug: subscription.tenants.slug,
+      amount: (paymentIntent.amount / 100).toFixed(2), // Convert cents to currency
+      currency: paymentIntent.currency.toUpperCase(),
+      planName: metadata.plan_name || subscription.subscription_plans?.name || 'Subscription',
+      expiryDate: new Date(subscription.current_period_end).toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+      receiptUrl: paymentIntent.charges?.data?.[0]?.receipt_url || null,
+    });
+
+    console.log('Payment receipt email sent to:', subscription.tenants.owner_email);
+  } catch (emailError) {
+    console.error('Failed to send payment receipt email:', emailError);
+    console.error('Email failed for tenant:', subscription.tenants.slug);
+  }
 }
 
 /**
