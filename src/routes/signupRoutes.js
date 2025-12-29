@@ -239,12 +239,14 @@ router.post('/signup/create-payment', async (req, res) => {
       currency: plan.price_currency,
       customer: customer.id,
       receipt_email: ownerEmail,
-      payment_method_types: [
-        'card',           // บัตรเครดิต/เดบิต
-        'promptpay',      // PromptPay
-        'paynow',         // PayNow (Singapore)
-        'grabpay',        // GrabPay
-      ],
+      // Temporarily use only 'card' for testing
+      // TODO: Enable other payment methods after configuring Stripe
+      payment_method_types: ['card'],
+      // payment_method_types: [
+      //   'card',           // บัตรเครดิต/เดบิต
+      //   'promptpay',      // PromptPay (ต้องเปิดใน Stripe Dashboard)
+      //   'grabpay',        // GrabPay (ต้องลงทะเบียน Stripe Connector)
+      // ],
       metadata: {
         plan_key: planKey,
         plan_name: plan.name,
