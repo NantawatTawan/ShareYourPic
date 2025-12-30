@@ -129,6 +129,7 @@ router.post('/signup/trial', async (req, res) => {
         owner_phone: ownerPhone,
         is_public: false,
         is_active: true,
+        payment_enabled: false, // Default: free uploads
       })
       .select()
       .single();
@@ -358,6 +359,7 @@ router.post('/signup/complete', async (req, res) => {
         owner_phone: metadata.owner_phone,
         is_public: false,
         is_active: true,
+        payment_enabled: false, // Default: free uploads
       })
       .select()
       .single();
