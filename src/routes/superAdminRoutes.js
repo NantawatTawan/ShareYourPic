@@ -155,7 +155,7 @@ router.post('/tenants', async (req, res) => {
       description,
       owner_email,
       owner_phone,
-      payment_enabled: payment_enabled !== undefined ? payment_enabled : true,
+      payment_enabled: payment_enabled !== undefined ? payment_enabled : false,
       price_amount: price_amount || 3500,
       price_currency: price_currency || 'thb',
       display_duration: display_duration || 5,
@@ -328,6 +328,70 @@ router.post('/admins', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create admin'
+    });
+  }
+});
+
+// PUT /super-admin/admins/:adminId - แก้ไข admin (เปลี่ยน tenant, password, role)
+router.put('/admins/:adminId', async (req, res) => {
+  try {
+    const { adminId } = req.params;
+    const { tenant_id, password, is_super_admin } = req.body;
+
+    // ห้ามแก้ไขตัวเอง (เพื่อป้องกันการล็อคตัวเอง)
+    if (adminId === req.admin.id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot modify yourself. Use profile settings instead.'
+      });
+    }
+
+    const updates = {};
+
+    // Update tenant_id (reassign to different tenant)
+    if (tenant_id !== undefined) {
+      updates.tenant_id = tenant_id;
+    }
+
+    // Update super admin status
+    if (is_super_admin !== undefined) {
+      updates.is_super_admin = is_super_admin;
+      // ถ้าเป็น super admin ต้อง clear tenant_id
+      if (is_super_admin) {
+        updates.tenant_id = null;
+      }
+    }
+
+    // Update password
+    if (password) {
+      updates.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    const { data: admin, error } = await db.supabase
+      .from('admins')
+      .update(updates)
+      .eq('id', adminId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        id: admin.id,
+        username: admin.username,
+        tenant_id: admin.tenant_id,
+        is_super_admin: admin.is_super_admin,
+        role: admin.role
+      },
+      message: 'Admin updated successfully'
+    });
+  } catch (error) {
+    console.error('Update admin error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update admin'
     });
   }
 });
